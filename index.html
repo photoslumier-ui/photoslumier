@@ -294,8 +294,8 @@
   #exit-btn{background:transparent;color:var(--paper);border:1px solid rgba(229,229,229,0.35) !important;}
   #exit-btn:hover{border-color:var(--paper) !important;}
 
-  #lock-overlay{position:fixed;inset:0;z-index:80;background:rgba(42,42,40,0.55);display:none;align-items:center;justify-content:center;padding:20px;}
-  #lock-overlay.open{display:flex;}
+  #lock-overlay,#reset-overlay{position:fixed;inset:0;z-index:80;background:rgba(42,42,40,0.55);display:none;align-items:center;justify-content:center;padding:20px;}
+  #lock-overlay.open,#reset-overlay.open{display:flex;}
   .lock-card{background:var(--paper);padding:32px 28px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25);}
   .lock-card h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:1.6rem;margin:0 0 6px;}
   .lock-card p{font-size:13px;color:var(--ink-soft);margin:0 0 16px;line-height:1.5;}
@@ -303,10 +303,12 @@
   .lock-card input:focus{outline:2px solid var(--accent);border-color:var(--accent);}
   .lock-row{display:flex;gap:8px;}
   .lock-row button{flex:1;padding:10px;border:0;font-size:12px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;}
-  #unlock-btn{background:var(--accent);color:#fff;}
-  #unlock-btn:hover{background:var(--accent-deep);}
-  #cancel-lock{background:var(--paper-deep);color:var(--ink);}
+  #unlock-btn,#reset-submit{background:var(--accent);color:#fff;}
+  #unlock-btn:hover,#reset-submit:hover{background:var(--accent-deep);}
+  #cancel-lock,#reset-cancel{background:var(--paper-deep);color:var(--ink);}
   .lock-error{color:var(--accent-deep);font-size:12px;margin-top:8px;display:none;}
+  .lock-forgot{display:block;margin:14px auto 0;background:none;border:0;color:var(--ink-faint);font-size:12px;text-decoration:underline;cursor:pointer;padding:0;}
+  .lock-forgot:hover{color:var(--accent);}
 
   #toast{position:fixed;left:50%;bottom:76px;transform:translate(-50%,20px);background:var(--ink);color:var(--paper);padding:10px 18px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;z-index:90;max-width:90vw;text-align:center;}
   #toast.show{opacity:1;transform:translate(-50%,0);}
@@ -751,6 +753,21 @@
         <button id="unlock-btn" type="button">Masuk</button>
       </div>
       <p class="lock-error" id="lock-error">Email atau password salah.</p>
+      <button id="forgot-link" type="button" class="lock-forgot">Lupa password?</button>
+    </div>
+  </div>
+
+  <div id="reset-overlay">
+    <div class="lock-card">
+      <h3>Atur Password Baru</h3>
+      <p>Masukkan password baru untuk akun admin.</p>
+      <input type="password" id="reset-input" placeholder="Password baru" autocomplete="new-password">
+      <input type="password" id="reset-confirm" placeholder="Ulangi password baru" autocomplete="new-password">
+      <div class="lock-row">
+        <button id="reset-cancel" type="button">Batal</button>
+        <button id="reset-submit" type="button">Simpan Password</button>
+      </div>
+      <p class="lock-error" id="reset-error"></p>
     </div>
   </div>
 
@@ -784,6 +801,17 @@
   var body = document.body;
   var siteRoot = document.getElementById('site-root');
   var currentReplaceTarget = null;
+
+  /* ---- password recovery: Supabase redirects here with a recovery token in
+     the URL after the user clicks the "reset password" link in their email ---- */
+  if (sb) {
+    sb.auth.onAuthStateChange(function(event){
+      if (event === 'PASSWORD_RECOVERY') {
+        var resetOverlay = document.getElementById('reset-overlay');
+        if (resetOverlay) resetOverlay.classList.add('open');
+      }
+    });
+  }
 
   /* ---- load published content from Supabase (falls back to the shipped defaults if offline/unavailable) ---- */
   if (sb) {
@@ -888,6 +916,60 @@
   unlockBtn.addEventListener('click', tryUnlock);
   lockInput.addEventListener('keydown', function(e){ if(e.key === 'Enter') tryUnlock(); });
   lockEmail.addEventListener('keydown', function(e){ if(e.key === 'Enter') lockInput.focus(); });
+
+  /* ---- forgot password: sends a reset link that comes back here as a PASSWORD_RECOVERY event ---- */
+  document.getElementById('forgot-link').addEventListener('click', async function(){
+    if (!sb) { return; }
+    var email = lockEmail.value.trim();
+    if (!email) {
+      lockError.textContent = 'Isi email dulu, baru klik "Lupa password?".';
+      lockError.style.display = 'block';
+      return;
+    }
+    try {
+      var redirectTo = window.location.origin + window.location.pathname;
+      var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+      if (res.error) throw res.error;
+      lockError.style.color = 'var(--ink-soft)';
+      lockError.textContent = 'Link reset password sudah dikirim ke ' + email + '. Cek email (termasuk folder spam).';
+      lockError.style.display = 'block';
+    } catch (e) {
+      lockError.style.color = '';
+      lockError.textContent = 'Gagal mengirim link reset. Coba lagi.';
+      lockError.style.display = 'block';
+    }
+  });
+
+  /* ---- set new password (after clicking the reset link from email) ---- */
+  var resetOverlay = document.getElementById('reset-overlay');
+  var resetInput = document.getElementById('reset-input');
+  var resetConfirm = document.getElementById('reset-confirm');
+  var resetError = document.getElementById('reset-error');
+  document.getElementById('reset-cancel').addEventListener('click', function(){ resetOverlay.classList.remove('open'); });
+  document.getElementById('reset-submit').addEventListener('click', async function(){
+    resetError.style.display = 'none';
+    if (!resetInput.value || resetInput.value.length < 6) {
+      resetError.textContent = 'Password minimal 6 karakter.';
+      resetError.style.display = 'block';
+      return;
+    }
+    if (resetInput.value !== resetConfirm.value) {
+      resetError.textContent = 'Password tidak sama.';
+      resetError.style.display = 'block';
+      return;
+    }
+    try {
+      var res = await sb.auth.updateUser({ password: resetInput.value });
+      if (res.error) throw res.error;
+      resetOverlay.classList.remove('open');
+      resetInput.value = ''; resetConfirm.value = '';
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      toast('Password berhasil diganti. Silakan masuk mode admin dengan password baru.');
+    } catch (e) {
+      resetError.textContent = 'Gagal menyimpan password: ' + (e && e.message ? e.message : e);
+      resetError.style.display = 'block';
+    }
+  });
 
   function markEditable(root){
     (root || document).querySelectorAll('[data-editable="text"]').forEach(function(el){
