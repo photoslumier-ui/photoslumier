@@ -207,6 +207,11 @@
   .gallery-head h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:clamp(1.9rem,4.5vw,3.2rem);margin:6px 0 0;}
   .gallery-head .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);font-family:'Inter',monospace,sans-serif;}
   .gallery-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:20px;align-items:start;}
+  /* Gallery photos (uploaded or replaced by admin) always keep their original color and
+     shape — no forced grayscale, no forced crop. Only the file itself is downsized/compressed
+     client-side before upload, purely to save storage. */
+  #gallery-grid .photo{aspect-ratio:auto !important;}
+  #gallery-grid .photo img{height:auto !important;object-fit:contain !important;filter:none !important;}
   .g1{grid-column:1/8;aspect-ratio:16/12;}
   .g2{grid-column:8/13;aspect-ratio:1/1;}
   .g3{grid-column:8/13;aspect-ratio:16/10;}
@@ -1055,7 +1060,7 @@
     var wrap = document.createElement('div');
     wrap.style.gridColumn = '6/13';
     wrap.innerHTML =
-      '<figure class="photo g3" style="aspect-ratio:16/11;">' +
+      '<figure class="photo g3 color">' +
         '<div class="photo-controls"><button class="pc-btn pc-replace">Ganti Foto</button><button class="pc-btn danger pc-remove">Hapus</button></div>' +
         '<img src="' + PLACEHOLDER_SVG + '" alt="Foto baru">' +
       '</figure>' +
