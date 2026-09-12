@@ -710,7 +710,7 @@
           <label for="bf-message" data-i18n-id='Ceritakan momen yang ingin kamu abadikan' data-i18n-en='Tell us about the moment you want to capture' data-i18n-zh='告诉我们你想记录的瞬间'>Ceritakan momen yang ingin kamu abadikan</label>
           <textarea id="bf-message" name="message" rows="3"></textarea>
         </div>
-        <button type="submit" class="cta-btn bf-submit"><span data-i18n-id='Kirim Permintaan &rarr;' data-i18n-en='Send Request &rarr;' data-i18n-zh='发送请求 &rarr;'>Kirim Permintaan &rarr;</span></button>
+        <button type="submit" class="cta-btn bf-submit"><span data-i18n-id='Kirim via WhatsApp &rarr;' data-i18n-en='Send via WhatsApp &rarr;' data-i18n-zh='通过WhatsApp发送 &rarr;'>Kirim via WhatsApp &rarr;</span></button>
         <p class="bf-status" id="bf-status" aria-live="polite"></p>
       </form>
     </div>
@@ -1182,39 +1182,49 @@
 
   /* ---- booking form ---- */
   var bookingForm = document.getElementById('booking-form');
+  var BOOKING_WHATSAPP = '6281239007857';
   if (bookingForm) {
-    bookingForm.addEventListener('submit', async function(e){
+    bookingForm.addEventListener('submit', function(e){
       e.preventDefault();
       var statusEl = document.getElementById('bf-status');
-      var submitBtn = bookingForm.querySelector('.bf-submit');
       statusEl.className = 'bf-status';
-      statusEl.textContent = '';
 
-      if (!sb) {
-        statusEl.textContent = 'Tidak bisa terhubung saat ini. Hubungi kami langsung lewat WhatsApp ya.';
+      var name = bookingForm.name.value.trim();
+      var contact = bookingForm.contact.value.trim();
+      var serviceSelect = bookingForm.service;
+      var serviceLabel = serviceSelect.options[serviceSelect.selectedIndex] ? serviceSelect.options[serviceSelect.selectedIndex].text : '';
+      var dateVal = bookingForm.preferred_date.value;
+      var message = bookingForm.message.value.trim();
+
+      if (!name || !contact) {
+        statusEl.textContent = 'Isi nama dan WhatsApp/Email dulu ya.';
         statusEl.className = 'bf-status err';
         return;
       }
 
-      submitBtn.disabled = true;
-      var payload = {
-        name: bookingForm.name.value.trim(),
-        contact: bookingForm.contact.value.trim(),
-        service: bookingForm.service.value || null,
-        preferred_date: bookingForm.preferred_date.value || null,
-        message: bookingForm.message.value.trim() || null
-      };
-      try {
-        var insRes = await sb.from('bookings').insert(payload);
-        if (insRes.error) throw insRes.error;
-        statusEl.textContent = 'Terkirim! Kami akan segera menghubungi kamu.';
-        statusEl.className = 'bf-status ok';
-        bookingForm.reset();
-      } catch (err) {
-        statusEl.textContent = 'Gagal mengirim, coba lagi atau hubungi kami langsung via WhatsApp.';
-        statusEl.className = 'bf-status err';
+      var dateLabel = '';
+      if (dateVal) {
+        var d = new Date(dateVal + 'T00:00:00');
+        if (!isNaN(d.getTime())) {
+          dateLabel = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
       }
-      submitBtn.disabled = false;
+
+      var lines = [
+        'Halo Lumie’r Studio! Saya mau booking sesi foto.',
+        '',
+        'Nama: ' + name,
+        'WhatsApp/Email: ' + contact
+      ];
+      if (serviceSelect.value) lines.push('Layanan: ' + serviceLabel);
+      if (dateLabel) lines.push('Tanggal: ' + dateLabel);
+      if (message) lines.push('Pesan: ' + message);
+
+      var waUrl = 'https://wa.me/' + BOOKING_WHATSAPP + '?text=' + encodeURIComponent(lines.join('\n'));
+      statusEl.textContent = 'Membuka WhatsApp...';
+      statusEl.className = 'bf-status ok';
+      window.open(waUrl, '_blank', 'noopener');
+      bookingForm.reset();
     });
   }
 
